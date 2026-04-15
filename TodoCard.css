@@ -699,6 +699,32 @@ body {
     margin: 0.5rem;
   }
 
+  .task-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .task-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .task-actions {
+    flex-wrap: wrap;
+  }
+
+  .edit-fields {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .edit-fields input[type="text"] {
+    width: 100%;
+  }
+}
+
   .meta-row,
   .due-row {
     flex-direction: column;

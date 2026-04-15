@@ -9,6 +9,7 @@ const tagsInput = document.getElementById('todo-tags');
 const STORAGE_KEY = 'todo-app-state';
 let nextTodoId = 1;
 let todos = [];
+let timeUpdateInterval;
 
 function formatDueDate(dateString) {
   const date = new Date(dateString);
@@ -19,22 +20,41 @@ function formatDueDate(dateString) {
   });
 }
 
-function getTimeRemaining(dateString) {
+function getTimeRemaining(dateString, status) {
+  if (status === 'done') {
+    return 'Completed';
+  }
+
   const now = Date.now();
   const dueTime = new Date(dateString).getTime();
   const diffMs = dueTime - now;
 
   if (diffMs < 0) {
     const overdueMs = Math.abs(diffMs);
+    const minutes = Math.floor(overdueMs / (1000 * 60));
     const hours = Math.floor(overdueMs / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    return days > 0
-      ? `Overdue by ${days} ${days === 1 ? 'day' : 'days'}`
-      : `Overdue by ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    const days = Math.floor(overdueMs / (1000 * 60 * 60 * 24));
+
+    if (days > 0) {
+      return `Overdue by ${days} ${days === 1 ? 'day' : 'days'}`;
+    } else if (hours > 0) {
+      return `Overdue by ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    } else {
+      return `Overdue by ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+    }
   }
 
-  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  return days === 1 ? 'Due tomorrow' : `Due in ${days} ${days === 1 ? 'day' : 'days'}`;
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (days > 0) {
+    return `Due in ${days} ${days === 1 ? 'day' : 'days'}`;
+  } else if (hours > 0) {
+    return `Due in ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  } else {
+    return `Due in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  }
 }
 
 function loadState() {
@@ -44,7 +64,11 @@ function loadState() {
   try {
     const state = JSON.parse(raw);
     if (Array.isArray(state.todos) && typeof state.nextTodoId === 'number') {
-      todos = state.todos;
+      todos = state.todos.map(todo => ({
+        ...todo,
+        status: todo.status || (todo.completed ? 'done' : 'pending'), // Migrate old data
+        completed: undefined // Remove completed, use status
+      }));
       nextTodoId = state.nextTodoId;
     }
   } catch (_) {
@@ -70,28 +94,56 @@ function renderTodos() {
   todos.forEach((todo) => {
     tasksListEl.appendChild(createTaskElement(todo));
   });
+
+  // Start time updates if there are pending/in-progress tasks
+  const hasActiveTasks = todos.some(todo => todo.status !== 'done');
+  if (hasActiveTasks && !timeUpdateInterval) {
+    timeUpdateInterval = setInterval(() => {
+      updateTimeDisplays();
+    }, 30000); // Update every 30 seconds
+  } else if (!hasActiveTasks && timeUpdateInterval) {
+    clearInterval(timeUpdateInterval);
+    timeUpdateInterval = null;
+  }
+}
+
+function updateTimeDisplays() {
+  todos.forEach(todo => {
+    if (todo.status === 'done') return;
+    const timeEl = document.querySelector(`[data-task-id="${todo.id}"] .time-remaining`);
+    if (timeEl) {
+      timeEl.textContent = getTimeRemaining(todo.due, todo.status);
+      timeEl.setAttribute('aria-live', 'polite');
+    }
+  });
 }
 
 function createTaskElement(todo) {
   const taskDiv = document.createElement('div');
-  taskDiv.className = 'task-item';
+  taskDiv.className = `task-item ${todo.status === 'done' ? 'completed' : ''} ${getTimeRemaining(todo.due, todo.status).includes('Overdue') ? 'overdue' : ''}`;
   taskDiv.setAttribute('data-task-id', todo.id);
 
   const isEditing = todo.isEditing || false;
+  const isOverdue = getTimeRemaining(todo.due, todo.status).includes('Overdue');
+  const isExpanded = todo.isExpanded || false;
+  const shouldCollapse = todo.description.length > 100;
 
   if (isEditing) {
     taskDiv.innerHTML = `
-      <form class="edit-form" data-todo-id="${todo.id}">
+      <form class="edit-form" data-testid="test-todo-edit-form" data-todo-id="${todo.id}">
         <div class="task-header">
           <input
             type="checkbox"
             id="edit-complete-toggle-${todo.id}"
             class="task-complete-toggle"
-            ${todo.completed ? 'checked' : ''}
+            data-testid="test-todo-complete-toggle"
+            ${todo.status === 'done' ? 'checked' : ''}
           />
           <div class="edit-fields">
-            <input id="edit-title-${todo.id}" type="text" value="${todo.title}" required placeholder="Task title">
-            <select id="edit-priority-${todo.id}">
+            <label for="edit-title-${todo.id}">Title</label>
+            <input id="edit-title-${todo.id}" data-testid="test-todo-edit-title-input" type="text" value="${todo.title}" required placeholder="Task title">
+            <label for="edit-priority-${todo.id}">Priority</label>
+            <select id="edit-priority-${todo.id}" data-testid="test-todo-edit-priority-select">
               <option value="high" ${todo.priority === 'high' ? 'selected' : ''}>High</option>
               <option value="medium" ${todo.priority === 'medium' ? 'selected' : ''}>Medium</option>
               <option value="low" ${todo.priority === 'low' ? 'selected' : ''}>Low</option>
@@ -99,15 +151,17 @@ function createTaskElement(todo) {
           </div>
         </div>
         <div class="task-content">
-          <textarea id="edit-description-${todo.id}" rows="2" placeholder="Task description">${todo.description}</textarea>
+          <label for="edit-description-${todo.id}">Description</label>
+          <textarea id="edit-description-${todo.id}" data-testid="test-todo-edit-description-input" rows="2" placeholder="Task description">${todo.description}</textarea>
           <div class="task-meta">
-            <input id="edit-due-date-${todo.id}" type="date" value="${todo.due}">
+            <label for="edit-due-date-${todo.id}">Due date</label>
+            <input id="edit-due-date-${todo.id}" data-testid="test-todo-edit-due-date-input" type="date" value="${todo.due}">
             <input id="edit-tags-${todo.id}" type="text" value="${todo.tags.join(', ')}" placeholder="Tags">
           </div>
         </div>
         <div class="task-actions">
-          <button type="submit" class="save-button">Save</button>
-          <button type="button" class="cancel-button">Cancel</button>
+          <button type="submit" data-testid="test-todo-save-button" class="save-button">Save</button>
+          <button type="button" data-testid="test-todo-cancel-button" class="cancel-button">Cancel</button>
         </div>
       </form>
     `;
@@ -116,7 +170,7 @@ function createTaskElement(todo) {
     const completeToggle = taskDiv.querySelector('.task-complete-toggle');
 
     completeToggle.addEventListener('change', (event) => {
-      updateTodoCompletion(todo.id, event.target.checked);
+      updateTodoStatus(todo.id, event.target.checked ? 'done' : 'pending');
     });
 
     form.addEventListener('submit', (event) => {
@@ -128,37 +182,59 @@ function createTaskElement(todo) {
       cancelEdit(todo.id);
     });
   } else {
+    const priorityIndicator = `<span class="priority-indicator ${todo.priority}" data-testid="test-todo-priority-indicator"></span>`;
+    const statusOptions = ['pending', 'in-progress', 'done'].map(status =>
+      `<option value="${status}" ${todo.status === status ? 'selected' : ''}>${status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>`
+    ).join('');
+
     taskDiv.innerHTML = `
       <div class="task-header">
         <input
           type="checkbox"
           id="complete-toggle-${todo.id}"
           class="task-complete-toggle"
-          ${todo.completed ? 'checked' : ''}
+          data-testid="test-todo-complete-toggle"
+          ${todo.status === 'done' ? 'checked' : ''}
         />
         <div class="task-info">
-          <h3 class="task-title ${todo.completed ? 'completed' : ''}">${todo.title}</h3>
+          ${priorityIndicator}
+          <h3 class="task-title ${todo.status === 'done' ? 'completed' : ''}">${todo.title}</h3>
           <div class="task-meta">
             <span class="priority ${todo.priority}">${todo.priority}</span>
-            <span class="status ${todo.completed ? 'done' : 'in-progress'}">${todo.completed ? 'Done' : 'In Progress'}</span>
+            <select class="status-control" data-testid="test-todo-status-control" aria-label="Task status">
+              ${statusOptions}
+            </select>
             <time datetime="${todo.due}">${formatDueDate(todo.due)}</time>
-            <span class="time-remaining">${getTimeRemaining(todo.due)}</span>
+            <span class="time-remaining ${isOverdue ? 'overdue-indicator' : ''}" data-testid="${isOverdue ? 'test-todo-overdue-indicator' : ''}" aria-live="polite">${getTimeRemaining(todo.due, todo.status)}</span>
           </div>
         </div>
         <div class="task-actions">
+          ${shouldCollapse ? `<button type="button" data-testid="test-todo-expand-toggle" class="expand-toggle" aria-expanded="${isExpanded}" aria-controls="collapsible-${todo.id}">Expand</button>` : ''}
           <button type="button" class="edit-button">Edit</button>
           <button type="button" class="delete-button">Delete</button>
         </div>
       </div>
-      <div class="task-content">
+      <div class="task-content" data-testid="test-todo-collapsible-section" id="collapsible-${todo.id}" ${shouldCollapse ? `style="display: ${isExpanded ? 'block' : 'none'};"` : ''}>
         <p class="task-description">${todo.description}</p>
         ${todo.tags.length > 0 ? `<div class="task-tags">${todo.tags.map(tag => `<span class="tag">${tag.trim()}</span>`).join('')}</div>` : ''}
       </div>
     `;
 
     taskDiv.querySelector('.task-complete-toggle').addEventListener('change', (event) => {
-      updateTodoCompletion(todo.id, event.target.checked);
+      updateTodoStatus(todo.id, event.target.checked ? 'done' : 'pending');
     });
+
+    const statusControl = taskDiv.querySelector('.status-control');
+    statusControl.addEventListener('change', (event) => {
+      updateTodoStatus(todo.id, event.target.value);
+    });
+
+    if (shouldCollapse) {
+      const expandToggle = taskDiv.querySelector('.expand-toggle');
+      expandToggle.addEventListener('click', () => {
+        toggleExpand(todo.id);
+      });
+    }
 
     taskDiv.querySelector('.edit-button').addEventListener('click', () => {
       startEdit(todo.id);
@@ -172,11 +248,18 @@ function createTaskElement(todo) {
   return taskDiv;
 }
 
-function updateTodoCompletion(todoId, completed) {
+function updateTodoStatus(todoId, status) {
   const todo = todos.find((item) => item.id === todoId);
   if (!todo) return;
-  todo.completed = completed;
+  todo.status = status;
   saveState();
+  renderTodos();
+}
+
+function toggleExpand(todoId) {
+  const todo = todos.find((item) => item.id === todoId);
+  if (!todo) return;
+  todo.isExpanded = !todo.isExpanded;
   renderTodos();
 }
 
@@ -267,7 +350,7 @@ function addNewTodo() {
     due: dueDate,
     priority,
     tags,
-    completed: false,
+    status: 'pending',
   });
 
   todoForm.reset();
