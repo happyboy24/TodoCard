@@ -6,18 +6,9 @@ const dueDateInput = document.getElementById('todo-due-date');
 const priorityInput = document.getElementById('todo-priority');
 const tagsInput = document.getElementById('todo-tags');
 
-let nextTodoId = 2;
-const todos = [
-  {
-    id: 1,
-    title: 'Design new landing page hero section',
-    description: 'Create modern hero section with gradient background, animated call-to-action button, and responsive typography. Include testimonials carousel and feature highlights.',
-    due: '2026-03-01',
-    priority: 'high',
-    tags: ['work', 'urgent', 'design'],
-    completed: false,
-  },
-];
+const STORAGE_KEY = 'todo-app-state';
+let nextTodoId = 1;
+let todos = [];
 
 function formatDueDate(dateString) {
   const date = new Date(dateString);
@@ -44,6 +35,25 @@ function getTimeRemaining(dateString) {
 
   const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   return days === 1 ? 'Due tomorrow' : `Due in ${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+
+  try {
+    const state = JSON.parse(raw);
+    if (Array.isArray(state.todos) && typeof state.nextTodoId === 'number') {
+      todos = state.todos;
+      nextTodoId = state.nextTodoId;
+    }
+  } catch (_) {
+    // Ignore invalid saved state and use a clean start.
+  }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ todos, nextTodoId }));
 }
 
 function renderTodos() {
@@ -261,6 +271,7 @@ function addNewTodo() {
   });
 
   todoForm.reset();
+  saveState();
   renderTodos();
 }
 
@@ -269,4 +280,5 @@ todoForm.addEventListener('submit', (event) => {
   addNewTodo();
 });
 
+loadState();
 renderTodos();
