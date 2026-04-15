@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A lightweight todo app with add, edit, delete, and completion tracking.">
+  <title>Todo App</title>
+  <link rel="stylesheet" href="TodoCard.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel intro-panel">
+      <h1>Todo App</h1>
+      <p>Manage all your tasks in one place.</p>
+    </section>
+
+    <section class="panel main-todo-card">
+      <h2>My Tasks</h2>
+
+      <!-- Add New Task Form -->
+      <div class="add-task-section">
+        <h3>Add New Task</h3>
+        <form id="todo-form" class="add-form">
+          <div class="form-row">
+            <label for="todo-title">Title</label>
+            <input id="todo-title" name="title" type="text" required placeholder="Task title">
+          </div>
+          <div class="form-row">
+            <label for="todo-description">Description</label>
+            <textarea id="todo-description" name="description" rows="2" placeholder="Describe the task"></textarea>
+          </div>
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="todo-due-date">Due date</label>
+              <input id="todo-due-date" name="dueDate" type="date" required>
+            </div>
+            <div class="form-row">
+              <label for="todo-priority">Priority</label>
+              <select id="todo-priority" name="priority">
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="todo-tags">Tags</label>
+            <input id="todo-tags" name="tags" type="text" placeholder="Comma-separated tags">
+          </div>
+          <button type="submit" id="todo-submit-button">Add Task</button>
+        </form>
+      </div>
+
+      <!-- Tasks List -->
+      <div class="tasks-list" id="tasks-list">
+        <!-- Tasks will be rendered here -->
+      </div>
+    </section>
+  </main>
+
+  <script src="TodoCard.js" defer></script>
+</body>
+</html>
